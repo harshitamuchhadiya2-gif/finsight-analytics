@@ -1,0 +1,50 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: finsight-backend
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${SECRET_KEY}
+      MONGODB_URL: ${MONGODB_URL}
+      MONGODB_DB: ${MONGODB_DB}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+    ports:
+      - "8000:8000"
+    volumes:
+      - finsight_uploads:/app/storage/uploads
+      - finsight_reports:/app/storage/reports
+    networks:
+      - finsight-network
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/docs')"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: finsight-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - finsight-network
+
+networks:
+  finsight-network:
+    driver: bridge
+
+volumes:
+  finsight_uploads:
+  finsight_reports:
