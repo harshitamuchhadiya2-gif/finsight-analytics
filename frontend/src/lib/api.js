@@ -1,8 +1,26 @@
-const API=(import.meta.env.VITE_API_URL||'').replace(/\/$/,'')+'/api'
+function getApiUrl() {
+  let base = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+  if (!base && typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host !== 'localhost' && host !== '127.0.0.1') {
+      base = 'https://finsight-api-prod.onrender.com';
+    }
+  }
+  if (base.endsWith('/api')) {
+    base = base.slice(0, -4);
+  }
+  return (base || '') + '/api';
+}
+const API = getApiUrl();
 export function token(){return localStorage.getItem('finsight_token')}
 async function request(path,options={}){
   const headers={...(options.headers||{})}; if(token()) headers.Authorization=`Bearer ${token()}`
-  const res=await fetch(API+path,{...options,headers});
+  let res;
+  try {
+    res = await fetch(API+path,{...options,headers});
+  } catch(err) {
+    throw new Error('Could not connect to backend server. The free cloud instance may be waking up (takes ~30-50s). Please wait a few seconds and try again.');
+  }
   if(!res.ok){let msg='Request failed'; try{const x=await res.json(); const d=x?.detail; msg=typeof d==='string'?d:(Array.isArray(d)?d.map(e=>e?.msg||JSON.stringify(e)).join(', '):(d?JSON.stringify(d):msg))}catch{}; throw new Error(msg)}
   const type=res.headers.get('content-type')||''; return type.includes('application/json')?res.json():res.blob()
 }
