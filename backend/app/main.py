@@ -17,8 +17,16 @@ from app.services.report import build_pdf
 
 ROOT=Path(__file__).resolve().parents[2]; UPLOAD_DIR=ROOT/'storage'/'uploads'; REPORT_DIR=ROOT/'storage'/'reports'; UPLOAD_DIR.mkdir(parents=True,exist_ok=True); REPORT_DIR.mkdir(parents=True,exist_ok=True)
 ALLOWED={'.csv','.xlsx','.xls','.xlsm','.pdf'}; app=FastAPI(title='FinSight Analytics API',version='2.0.0')
-CORS_ORIGINS=[x.strip() for x in os.getenv('CORS_ORIGINS','http://localhost:5173,http://127.0.0.1:5173').split(',') if x.strip()]
-app.add_middleware(CORSMiddleware,allow_origins=CORS_ORIGINS,allow_credentials=True,allow_methods=['*'],allow_headers=['*'])
+cors_env = os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174').strip()
+CORS_ORIGINS = [x.strip() for x in cors_env.split(',') if x.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_origin_regex=r"^https://.*\.vercel\.app$|^https://.*\.onrender\.com$|^http://localhost(:\d+)?$",
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*']
+)
 def now(): return datetime.now(timezone.utc).isoformat()
 def uid(): return uuid.uuid4().hex
 
