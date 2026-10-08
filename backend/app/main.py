@@ -193,6 +193,15 @@ def download_file(file_id:str,user=Depends(get_current_user),db=Depends(get_db))
     r=db.requests.find_one({'_id':f['request_id']})
     if user['role']!='admin' and r['client_id']!=user['_id']: raise HTTPException(403,'Forbidden')
     return FileResponse(f['stored_name'],filename=f['original_name'])
+
+@app.get('/api/requests/{request_id}/original-file')
+def download_original_file(request_id:str,user=Depends(get_current_user),db=Depends(get_db)):
+    r=db.requests.find_one({'_id':request_id})
+    if not r: raise HTTPException(404,'Request not found')
+    if user['role']!='admin' and r['client_id']!=user['_id']: raise HTTPException(403,'Forbidden')
+    f=db.files.find_one({'request_id':request_id},sort=[('created_at',-1)])
+    if not f: raise HTTPException(404,'No original file found for this request')
+    return FileResponse(f['stored_name'],filename=f['original_name'])
 @app.post('/api/admin/requests/{request_id}/status')
 def set_status(request_id:str,p:StatusIn,user=Depends(require_admin),db=Depends(get_db)):
     allowed={'New','Under Review','In Analysis','Internal Review','Report Ready','Completed'}
@@ -263,18 +272,66 @@ def run_analysis(request_id:str,user=Depends(require_admin),db=Depends(get_db)):
     db.requests.update_one({'_id':request_id},{'$set':{'status':'Report Ready','updated_at':now(),'financials_entered':True}})
     return {**analysis_out(a),'report':{'id':rep['_id'],'title':rep['title'],'status':'Ready'}}
 def build_report_content(request, analysis):
-    business=request.get("business_name","Business")
+    business = request.get("business_name", "Business")
+    rev = float(analysis.get('revenue', 0))
+    exp = float(analysis.get('expenses', 0))
+    profit = float(analysis.get('profit', 0))
+    margin = float(analysis.get('margin', 0))
+    ratio = (exp / rev * 100) if rev else 0
+    period = f"{request.get('period_from', 'N/A')} to {request.get('period_to', 'Present')}"
+
+    base_findings = analysis.get("findings") or []
+    default_findings = [
+        f"Cost Efficiency Ratio: Total operating expenses represent {ratio:.1f}% of gross revenue, emphasizing the necessity for recurring overhead rationalization.",
+        f"Profitability Index: Current net profit margin is {margin:.1f}%, indicating {'a resilient operating surplus' if margin >= 15 else 'tight margin tolerances requiring pricing and vendor discipline'}.",
+        "Expenditure Drivers: Overhead in top supplier and operational categories forms the majority of cash outflow.",
+        "Liquidity & Working Capital: Operational velocity requires disciplined receivable collection and inventory cycles to support sustained growth."
+    ]
+    findings = base_findings if len(base_findings) >= 2 else (base_findings + default_findings[len(base_findings):])
+
     return {
-        "title":f"Financial Analysis Report — {business}",
-        "executive_summary":f"{business} has a net margin of {float(analysis.get('margin',0)):.1f}%. This report summarizes profitability, cost drivers and practical opportunities for improvement.",
-        "findings":analysis.get("findings",[]),
-        "recommendations":["Review the largest cost categories monthly.","Compare budget versus actual performance.","Review pricing and contribution margins.","Monitor operating cash requirements alongside profit.","Re-run the analysis after the next reporting period."],
-        "analyst_notes":"",
-        "case_study":{
-            "option_a":{"name":"Option A","advantages":["No ownership dilution","Tax shield on interest","Lower WACC","Higher EPS if project succeeds"],"disadvantages":["Interest coverage drops to risky levels","Fixed obligation even if project delayed"]},
-            "option_b":{"name":"Option B","advantages":["Much lower leverage (D/E = 0.25)","Better interest coverage (>2.0×)","PE brings governance & expertise"],"disadvantages":["11.6% ownership dilution","PE gets board seats & tag-along rights","Higher WACC"]},
-            "final_decision":"Option B",
-            "considering":"Fixed obligation, NPV sensitivity, Competitive Market, Project Delay, Better Interest Coverage"
+        "title": f"Executive Financial Performance & Advisory Report — {business}",
+        "executive_summary": f"FinSight Analytics completed an executive financial diagnostic for {business} covering {period}. The business recorded gross revenue of ₹{rev:,.0f} against total operating expenditures of ₹{exp:,.0f}, yielding a net operating profit of ₹{profit:,.0f} and an operating net margin of {margin:.1f}%. Operating costs consume {ratio:.1f}% of top-line revenue. This advisory dossier evaluates profitability drivers, expenditure distribution, capital structure resilience, and phased tactical interventions to protect and expand enterprise value.",
+        "findings": findings,
+        "recommendations": [
+            "Phase 1 (Immediate · 0–30 Days): Conduct itemized audit of top three expenditure categories; renegotiate core supplier terms and eliminate discretionary outflows.",
+            "Phase 2 (Tactical · 30–60 Days): Enforce minimum contribution margin thresholds on all product/service offerings and monitor weekly cash-conversion cycles.",
+            "Phase 3 (Operational · 60–90 Days): Deploy automated variance alerts comparing budget benchmarks against actual bank disbursements.",
+            "Phase 4 (Strategic · 90+ Days): Optimize debt-to-equity leverage, preserve liquidity cushions, and reinvest operating surplus into high-yield expansion.",
+            "Governance: Review quarterly financial health scorecards with FinSight Analytics to track performance and benchmark improvements."
+        ],
+        "analyst_notes": f"Advisory evaluation prepared by FinSight Corporate Advisory. Findings and baseline metrics are calibrated from documentation submitted for {business}.",
+        "case_study": {
+            "option_a": {
+                "name": "Option A: Senior Debt Financing",
+                "advantages": [
+                    "Zero equity ownership dilution for founders",
+                    "Interest payments generate full corporate tax shields",
+                    "Lower theoretical Weighted Average Cost of Capital (WACC)",
+                    "Maximized return on equity (ROE) if capital project delivers expected yield"
+                ],
+                "disadvantages": [
+                    "Fixed contractual interest obligations elevate insolvency risk during downturns",
+                    "Debt service coverage ratio (DSCR) compresses significantly",
+                    "Restrictive financial covenants constrain subsequent operational flexibility"
+                ]
+            },
+            "option_b": {
+                "name": "Option B: Strategic Equity / Private Equity Partner",
+                "advantages": [
+                    "Substantially lower financial leverage (Target D/E ratio < 0.35x)",
+                    "Maintains resilient interest coverage (>2.5x safety threshold)",
+                    "Strategic partner contributes institutional governance, market access, and operational scaling",
+                    "Zero fixed debt service drain during unforeseen project incubation delays"
+                ],
+                "disadvantages": [
+                    "Minority equity dilution (~11.6% shareholding)",
+                    "Board representation with shared strategic oversight and tag-along covenants",
+                    "Higher overall long-term cost of equity capital relative to nominal debt"
+                ]
+            },
+            "final_decision": "Option B (Strategic Equity Partner)",
+            "considering": "Fixed debt obligations, sensitivity to project delays, competitive market pressures, cash-flow buffer preservation, and long-term enterprise valuation security."
         }
     }
 

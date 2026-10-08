@@ -25,7 +25,9 @@ export const api={
  sendReport:(id)=>request(`/admin/reports/${id}/send`,{method:'POST'}),
  contact:(body)=>request('/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),
  contactInquiries:()=>request('/admin/contact-inquiries'),
- updateContactStatus:(id,status)=>request(`/admin/contact-inquiries/${id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})})
+ updateContactStatus:(id,status)=>request(`/admin/contact-inquiries/${id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})}),
+ downloadOriginalFile:(requestId,filename)=>download(`/requests/${requestId}/original-file`,filename||'client_original_report.xlsx')
 }
 export async function openPdf(path){const blob=await request(path);const url=URL.createObjectURL(blob);window.open(url,'_blank','noopener,noreferrer');setTimeout(()=>URL.revokeObjectURL(url),60000)}
 export async function download(path,filename){const blob=await request(path);const url=URL.createObjectURL(blob);const a=document.createElement('a');a.style.display='none';a.href=url;a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},1000)}
+export async function downloadOriginalFile(requestId,filename='client_original_report.xlsx'){return download(`/requests/${requestId}/original-file`,filename)}
